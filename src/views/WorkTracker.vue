@@ -56,7 +56,7 @@
                         v-for="task in recentTasks" 
                         :key="task.id" 
                         class="task-item"
-                        :class="{ 'overdue': isOverdue(task.dueDate) }"
+                        :class="{ 'overdue': isOverdue(task.dueBy) }"
                     >
                         <div class="task-content">
                             <div class="task-header">
@@ -71,12 +71,11 @@
                             <p class="task-assignee">
                                 Assigned to: {{ getMemberName(task.memberId) }}
                             </p>
-                            <p class="task-due">Due: {{ formatDate(task.dueDate) }}</p>
+                            <p class="task-due">Due: {{ formatDueDate(task.dueBy) }}</p>
                         </div>
                         <div class="task-actions">
                             <select 
-                                :value="task.status" 
-                                @change="updateTaskStatus(task.id, $event.target.value)"
+                                v-model="task.status" 
                                 class="status-select"
                                 :style="{ 
                                     backgroundColor: task.status === 'pending' ? '#575757' : 
@@ -89,7 +88,10 @@
                                 <option value="in-progress">In Progress</option>
                                 <option value="completed">Completed</option>
                             </select>
-                            <button @click="deleteTask(task.id)" class="btn btn-danger btn-sm">
+                            <button @click="updateTaskStatus(task.id, task.status)" class="btn btn-success btn-sm save-btn" title="Save Status">
+                                💾
+                            </button>
+                            <button @click="deleteTask(task.id)" class="btn btn-danger btn-sm" title="Delete Task">
                                 🗑️
                             </button>
                         </div>
@@ -317,7 +319,9 @@ import {
     generateCalendarEvents,
     formatDate,
     formatDateTime,
-    getPriorityColor
+    getPriorityColor,
+    fetchTasks,
+    fetchMeetings
 } from '../components/WorkTracker.js'
 
 export default {
@@ -422,25 +426,43 @@ export default {
             meetingForm.attendees = []
         }
 
-        const submitTask = () => {
+        const submitTask = async () => {
             if (!taskForm.title || !taskForm.memberId || !taskForm.dueDate) {
                 alert('Please fill in all required fields')
                 return
             }
 
-            addTask(parseInt(taskForm.memberId), {
-                title: taskForm.title,
-                description: taskForm.description,
-                dueDate: taskForm.dueDate,
-                priority: taskForm.priority,
-                assignedBy: 'Team Leader'
-            })
-
-            closeTaskModal()
-            updateCalendarEvents()
+            try {
+                // Show loading indication
+                const loadingMsg = alert('Adding task...');
+                
+                // Add the task to Firestore
+                await addTask(parseInt(taskForm.memberId), {
+                    title: taskForm.title,
+                    description: taskForm.description,
+                    dueDate: new Date(taskForm.dueDate), // This will be mapped to dueBy in the addTask function
+                    priority: taskForm.priority,
+                    assignedBy: 'Team Leader'
+                });
+                
+                // Close the modal
+                closeTaskModal();
+                
+                // Refresh tasks from Firestore
+                await fetchTasks();
+                
+                // Update calendar events
+                updateCalendarEvents();
+                
+                // Notify user
+                alert('Task added successfully!');
+            } catch (error) {
+                console.error("Error adding task:", error);
+                alert('Failed to add task. Please try again.');
+            }
         }
 
-        const submitMeeting = () => {
+        const submitMeeting = async () => {
             if (!meetingForm.title || !meetingForm.startDate || !meetingForm.endDate) {
                 alert('Please fill in all required fields')
                 return
@@ -451,35 +473,69 @@ export default {
                 return
             }
 
-            addMeeting({
-                title: meetingForm.title,
-                description: meetingForm.description,
-                startDate: meetingForm.startDate,
-                endDate: meetingForm.endDate,
-                location: meetingForm.location,
-                attendees: [...meetingForm.attendees]
-            })
-
-            closeMeetingModal()
-            updateCalendarEvents()
-        }
-
-        const updateTaskStatus = (taskId, status) => {
-            updateTaskStatusInStore(taskId, status)
-            updateCalendarEvents()
-        }
-
-        const deleteTask = (taskId) => {
-            if (confirm('Are you sure you want to delete this task?')) {
-                deleteTaskFromStore(taskId)
-                updateCalendarEvents()
+            try {
+                // Show loading indication
+                const loadingMsg = alert('Scheduling meeting...');
+                
+                // Add the meeting to Firestore
+                await addMeeting({
+                    title: meetingForm.title,
+                    description: meetingForm.description,
+                    startDate: meetingForm.startDate,
+                    endDate: meetingForm.endDate,
+                    location: meetingForm.location,
+                    attendees: [...meetingForm.attendees]
+                });
+                
+                // Close the modal
+                closeMeetingModal();
+                
+                // Refresh meetings from Firestore
+                await fetchMeetings();
+                
+                // Update calendar events
+                updateCalendarEvents();
+                
+                // Notify user
+                alert('Meeting scheduled successfully!');
+            } catch (error) {
+                console.error("Error scheduling meeting:", error);
+                alert('Failed to schedule meeting. Please try again.');
             }
         }
 
-        const deleteMeeting = (meetingId) => {
+        const updateTaskStatus = async (taskId, status) => {
+            try {
+                await updateTaskStatusInStore(taskId, status);
+                updateCalendarEvents();
+                alert("Task status updated successfully!");
+            } catch (error) {
+                console.error("Error updating task status:", error);
+                alert("Failed to update task status. Please try again.");
+            }
+        }
+
+        const deleteTask = async (taskId) => {
+            if (confirm('Are you sure you want to delete this task?')) {
+                try {
+                    await deleteTaskFromStore(taskId);
+                    updateCalendarEvents();
+                } catch (error) {
+                    console.error("Failed to delete task:", error);
+                    alert("Failed to delete task. Please try again.");
+                }
+            }
+        }
+
+        const deleteMeeting = async (meetingId) => {
             if (confirm('Are you sure you want to delete this meeting?')) {
-                deleteMeetingFromStore(meetingId)
-                updateCalendarEvents()
+                try {
+                    await deleteMeetingFromStore(meetingId);
+                    updateCalendarEvents();
+                } catch (error) {
+                    console.error("Failed to delete meeting:", error);
+                    alert("Failed to delete meeting. Please try again.");
+                }
             }
         }
 
@@ -488,13 +544,39 @@ export default {
             return member ? member.name : 'Unknown'
         }
 
-        const isOverdue = (dueDate) => {
-            return new Date(dueDate) < new Date()
+        const isOverdue = (dueBy) => {
+            if (!dueBy) return false;
+            
+            try {
+                // Handle Firestore timestamp or string date format
+                const dueDate = typeof dueBy === 'object' && dueBy.toDate ? 
+                    dueBy.toDate() : new Date(dueBy);
+                
+                return dueDate < new Date();
+            } catch (error) {
+                console.error("Error checking if overdue:", dueBy, error);
+                return false;
+            }
         }
 
         const updateCalendarEvents = () => {
             calendarOptions.events = generateCalendarEvents()
         }
+
+        const formatDueDate = (dueBy) => {
+            if (!dueBy) return "No due date";
+            
+            try {
+                // Handle Firestore timestamp or string date format
+                const date = typeof dueBy === 'object' && dueBy.toDate ? 
+                    dueBy.toDate() : new Date(dueBy);
+                
+                return formatDate(date);
+            } catch (error) {
+                console.error("Error formatting date:", dueBy, error);
+                return "Invalid date";
+            }
+        };
 
         // Assign the implementation to the previously declared variable
         handleEventClick = (clickInfo) => {
@@ -537,9 +619,16 @@ export default {
         }
 
         // Lifecycle
-        onMounted(() => {
+        onMounted(async () => {
             initializeForms()
             updateCalendarEvents()
+
+            try {
+                await fetchTasks(); // Fetch tasks from Firestore
+                await fetchMeetings(); // Fetch meetings from Firestore
+            } catch (error) {
+                console.error("Error fetching data:", error);
+            }
         })
 
         return {
@@ -572,7 +661,8 @@ export default {
             getPendingTasksCount,
             formatDate,
             formatDateTime,
-            getPriorityColor
+            getPriorityColor,
+            formatDueDate
         }
     }
 }
@@ -641,6 +731,11 @@ export default {
 
 .btn-danger {
     background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+    color: #333;
+}
+
+.save-btn {
+    background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
     color: #333;
 }
 

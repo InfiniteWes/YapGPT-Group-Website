@@ -1,4 +1,6 @@
 import { reactive, ref, computed } from 'vue'
+import { collection, addDoc, getDocs, doc, deleteDoc, updateDoc } from "firebase/firestore";
+import { db } from "../firebase"; // Import Firestore instance
 
 // Team members data
 export const teamMembers = [
@@ -41,58 +43,89 @@ export const taskState = reactive({
 })
 
 // Task management functions
-export function addTask(memberId, taskData) {
-  const task = {
-    id: taskState.nextTaskId++,
-    memberId,
-    title: taskData.title,
-    description: taskData.description || '',
-    dueDate: taskData.dueDate,
-    priority: taskData.priority || 'medium',
-    status: 'pending',
-    createdAt: new Date().toISOString(),
-    assignedBy: taskData.assignedBy || 'System'
-  }
-  
-  taskState.tasks.push(task)
-  return task
+export async function addTask(memberId, taskData) {
+    const task = {
+        memberId,
+        title: taskData.title,
+        description: taskData.description || '',
+        dueBy: taskData.dueDate || new Date(), // Store as Date object for Firestore
+        priority: taskData.priority || 'Medium',
+        status: taskData.status || 'Pending',
+        createdAt: new Date(),
+        assignedBy: taskData.assignedBy || 'System'
+    };
+
+    // Log what we're storing for debugging
+    console.log("Adding task with dueBy:", task.dueBy);
+
+    const docRef = await addDoc(collection(db, "tasks"), task); // Add to Firestore
+    return { id: docRef.id, ...task }; // Return the task with Firestore document ID
 }
 
-export function addMeeting(meetingData) {
-  const meeting = {
-    id: taskState.nextMeetingId++,
-    title: meetingData.title,
-    description: meetingData.description || '',
-    startDate: meetingData.startDate,
-    endDate: meetingData.endDate,
-    attendees: meetingData.attendees || [],
-    location: meetingData.location || 'Virtual',
-    createdAt: new Date().toISOString(),
-    type: 'meeting'
-  }
-  
-  taskState.meetings.push(meeting)
-  return meeting
+export async function addMeeting(meetingData) {
+    const meeting = {
+        id: meetingData.id,
+        title: meetingData.title,
+        description: meetingData.description || '',
+        startDate: meetingData.startDate,
+        endDate: meetingData.endDate,
+        attendees: meetingData.attendees || [],
+        location: meetingData.location || 'Virtual',
+        createdAt: new Date(),
+        createdBy: meetingData.createdBy || 'System'
+    };
+
+    const docRef = await addDoc(collection(db, "meetings"), meeting); // Add to Firestore
+    return { id: docRef.id, ...meeting }; // Return the meeting with Firestore document ID
 }
 
-export function updateTaskStatus(taskId, status) {
-  const task = taskState.tasks.find(t => t.id === taskId)
-  if (task) {
-    task.status = status
+export async function updateTaskStatus(taskId, status) {
+  try {
+    // First update the local state
+    const task = taskState.tasks.find(t => t.id === taskId);
+    if (task) {
+      task.status = status;
+      
+      // Then update in Firestore
+      const taskRef = doc(db, "tasks", taskId);
+      await updateDoc(taskRef, { status: status });
+      console.log(`Task ${taskId} status updated to ${status}`);
+    }
+  } catch (error) {
+    console.error("Error updating task status:", error);
+    throw error;
   }
 }
 
-export function deleteTask(taskId) {
-  const index = taskState.tasks.findIndex(t => t.id === taskId)
-  if (index > -1) {
-    taskState.tasks.splice(index, 1)
+export async function deleteTask(taskId) {
+  try {
+    // Delete from Firestore
+    await deleteDoc(doc(db, "tasks", taskId));
+    
+    // Also remove from local state
+    const index = taskState.tasks.findIndex(t => t.id === taskId);
+    if (index > -1) {
+      taskState.tasks.splice(index, 1);
+    }
+  } catch (error) {
+    console.error("Error deleting task:", error);
+    throw error;
   }
 }
 
-export function deleteMeeting(meetingId) {
-  const index = taskState.meetings.findIndex(m => m.id === meetingId)
-  if (index > -1) {
-    taskState.meetings.splice(index, 1)
+export async function deleteMeeting(meetingId) {
+  try {
+    // Delete from Firestore
+    await deleteDoc(doc(db, "meetings", meetingId));
+    
+    // Also remove from local state
+    const index = taskState.meetings.findIndex(m => m.id === meetingId);
+    if (index > -1) {
+      taskState.meetings.splice(index, 1);
+    }
+  } catch (error) {
+    console.error("Error deleting meeting:", error);
+    throw error;
   }
 }
 
@@ -123,7 +156,7 @@ export function generateCalendarEvents() {
     events.push({
       id: `task-${task.id}`,
       title: `${member?.name}: ${task.title}`,
-      start: task.dueDate,
+      start: task.dueBy,
       backgroundColor: member?.color || '#gray',
       borderColor: member?.color || '#gray',
       extendedProps: {
@@ -185,4 +218,33 @@ export function getPriorityColor(priority) {
     high: '#F44336'
   }
   return colors[priority] || colors.medium
+}
+
+// Fetch functions
+export async function fetchTasks() {
+    const querySnapshot = await getDocs(collection(db, "tasks"));
+    const tasks = [];
+    querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        
+        // Ensure dueBy is properly formatted when coming from Firestore
+        const task = { 
+            id: doc.id, 
+            ...data 
+        };
+        
+        tasks.push(task);
+    });
+    
+    console.log("Fetched tasks:", tasks); // Debug log to see what we're getting
+    taskState.tasks = tasks; // Update the reactive state
+}
+
+export async function fetchMeetings() {
+    const querySnapshot = await getDocs(collection(db, "meetings"));
+    const meetings = [];
+    querySnapshot.forEach((doc) => {
+        meetings.push({ id: doc.id, ...doc.data() });
+    });
+    taskState.meetings = meetings; // Update the reactive state
 }
