@@ -63,8 +63,8 @@ export async function addTask(memberId, taskData) {
 }
 
 export async function addMeeting(meetingData) {
+    // Create the meeting object without the ID field
     const meeting = {
-        id: meetingData.id,
         title: meetingData.title,
         description: meetingData.description || '',
         startDate: meetingData.startDate,
@@ -74,6 +74,9 @@ export async function addMeeting(meetingData) {
         createdAt: new Date(),
         createdBy: meetingData.createdBy || 'System'
     };
+
+    // Log what we're storing for debugging
+    console.log("Adding meeting:", meeting);
 
     const docRef = await addDoc(collection(db, "meetings"), meeting); // Add to Firestore
     return { id: docRef.id, ...meeting }; // Return the meeting with Firestore document ID
@@ -115,6 +118,8 @@ export async function deleteTask(taskId) {
 
 export async function deleteMeeting(meetingId) {
   try {
+    console.log("Deleting meeting with ID:", meetingId);
+    
     // Delete from Firestore
     await deleteDoc(doc(db, "meetings", meetingId));
     
@@ -122,6 +127,9 @@ export async function deleteMeeting(meetingId) {
     const index = taskState.meetings.findIndex(m => m.id === meetingId);
     if (index > -1) {
       taskState.meetings.splice(index, 1);
+      console.log("Meeting removed from local state");
+    } else {
+      console.warn("Meeting not found in local state");
     }
   } catch (error) {
     console.error("Error deleting meeting:", error);
@@ -141,9 +149,29 @@ export function getPendingTasksCount(memberId) {
 
 export function getUpcomingMeetings() {
   const now = new Date()
-  return taskState.meetings.filter(meeting => 
-    new Date(meeting.startDate) > now
-  ).sort((a, b) => new Date(a.startDate) - new Date(b.startDate))
+  return taskState.meetings.filter(meeting => {
+    try {
+      // Handle Firestore timestamp or string date format
+      const startDate = typeof meeting.startDate === 'object' && meeting.startDate.toDate ? 
+          meeting.startDate.toDate() : new Date(meeting.startDate);
+      return startDate > now;
+    } catch (error) {
+      console.error("Error comparing meeting date:", meeting.startDate, error);
+      return false;
+    }
+  }).sort((a, b) => {
+    try {
+      // Handle Firestore timestamp or string date format
+      const dateA = typeof a.startDate === 'object' && a.startDate.toDate ? 
+          a.startDate.toDate() : new Date(a.startDate);
+      const dateB = typeof b.startDate === 'object' && b.startDate.toDate ? 
+          b.startDate.toDate() : new Date(b.startDate);
+      return dateA - dateB;
+    } catch (error) {
+      console.error("Error sorting meeting dates:", error);
+      return 0;
+    }
+  });
 }
 
 // Calendar event generation
@@ -244,7 +272,17 @@ export async function fetchMeetings() {
     const querySnapshot = await getDocs(collection(db, "meetings"));
     const meetings = [];
     querySnapshot.forEach((doc) => {
-        meetings.push({ id: doc.id, ...doc.data() });
+        const data = doc.data();
+        
+        // Ensure proper formatting when coming from Firestore
+        const meeting = { 
+            id: doc.id, 
+            ...data 
+        };
+        
+        meetings.push(meeting);
     });
+    
+    console.log("Fetched meetings:", meetings); // Debug log to see what we're getting
     taskState.meetings = meetings; // Update the reactive state
 }
