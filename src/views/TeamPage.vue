@@ -5,6 +5,7 @@
             <div>
                 <p>Role: Team Member</p>
                 <p>Major: Computer Science</p>
+                <img src="../assets/alyssa.jpeg" alt="Alyssa Calvillo" class="images" />
             </div>
         </div>
         <div class="grid2">
@@ -12,6 +13,7 @@
             <div>
                 <p>Role: Team Member</p>
                 <p>Major: Computer Science</p>
+                <img src="../assets/deepa.jpeg" alt="Deepa Kale" class="images"/>
             </div>
         </div>
         <div class="grid3">
@@ -19,6 +21,7 @@
             <div>
                 <p>Role: Team Leader</p>
                 <p>Major: Computer Science</p>
+                <img src="../assets/wes.jpeg" alt="Wesley Spangler" class="images"/>
             </div>
         </div>
         <div class="grid4">
@@ -26,6 +29,7 @@
             <div>
                 <p>Role: Team Member</p>
                 <p>Major: Computer Science</p>
+                <img src="../assets/will.jpeg" alt="William Paar" class="images"/>
             </div>
         </div>
     </div>
@@ -82,6 +86,10 @@
 
 .name-titles {
     font-size: 2rem;
+}
+
+.images {
+    width: 100%;
 }
 
 </style>
