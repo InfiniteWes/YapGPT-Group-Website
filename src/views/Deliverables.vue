@@ -23,7 +23,7 @@
             </div>
             <div class="stage-card">
                 <h2>Stage 2</h2>
-                <div class="details-stage-2">
+                <div class="stage-content">
                     <ul>
                         <li>Implementation Stage
                             <ul>
