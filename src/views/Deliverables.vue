@@ -24,8 +24,19 @@
             <div class="stage-card">
                 <h2>Stage 2</h2>
                 <div class="details-stage-2">
-                    <h3>To Be Added</h3>
-                    <h3 class="dots"><span>.</span><span>.</span><span>.</span></h3>
+                    <ul>
+                        <li>Implementation Stage
+                            <ul>
+                                <li>UML Class Diagram</li>
+                                <li>Sequence Diagram</li>
+                                <li>Use-Case Diagram</li>
+                                <li>Low-fidelity Prototype</li>
+                                <li>Project Presentation</li>
+                                <li>Implementation Plan</li>
+                                <li>Project Report</li>
+                            </ul>
+                        </li>
+                    </ul>
                 </div>
             </div>
             <div class="stage-card">
